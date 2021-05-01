@@ -1087,6 +1087,7 @@ Proof.
   reflexivity.
 Qed.
 
+End PartialMap.
 
 
 
