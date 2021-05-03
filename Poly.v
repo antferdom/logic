@@ -562,5 +562,455 @@ Example test_split:
   split [(1,false);(2,false)] = ([1;2],[false;false]).
 Proof. simpl. reflexivity. Qed.
 
+(* ================================================================= *)
+(** ** Polymorphic Options *)
+
+(** Our last polymorphic type for now is _polymorphic options_,
+    which generalize [natoption] from the previous chapter.  (We put
+    the definition inside a module because the standard library
+    already defines [option] and it's this one that we want to use
+    below.) *)
+
+Module OptionPlayground.
+
+Inductive option (X : Type) : Type :=
+  | Some (x : X)
+  | None.
+
+Arguments Some {X} _.
+Arguments None {X}.
+
+End OptionPlayground.
+
+(** We can now rewrite the [nth_error] function so that it works
+    with any type of lists. *)
+
+Fixpoint nth_error {X : Type} (l : list X) (n : nat)
+                   : option X :=
+  match l with
+  | nil => None
+  | a :: l' => match n with
+               | O => Some a
+               | S n' => nth_error l' n'
+               end
+  end.
+
+Example test_nth_error1 : nth_error [4;5;6;7] 0 = Some 4.
+Proof. reflexivity. Qed.
+Example test_nth_error2 : nth_error [[1];[2]] 1 = Some [2].
+Proof. reflexivity. Qed.
+Example test_nth_error3 : nth_error [true] 2 = None.
+Proof. reflexivity. Qed.
+
+(* ################################################################# *)
+(** * Functions as Data *)
+
+(** Like most modern programming languages -- especially other
+    "functional" languages, including OCaml, Haskell, Racket, Scala,
+    Clojure, etc. -- Coq treats functions as first-class citizens,
+    allowing them to be passed as arguments to other functions,
+    returned as results, stored in data structures, etc. *)
+
+(* ================================================================= *)
+(** ** Higher-Order Functions *)
+
+(** Functions that manipulate other functions are often called
+    _higher-order_ functions.  Here's a simple one: *)
+
+Definition doit3times {X:Type} (f:X->X) (n:X) : X :=
+  f (f (f n)).
+
+(** The argument [f] here is itself a function (from [X] to
+    [X]); the body of [doit3times] applies [f] three times to some
+    value [n]. *)
+
+Check @doit3times : forall X : Type, (X -> X) -> X -> X.
+
+Example test_doit3times: doit3times minustwo 9 = 3.
+Proof. reflexivity. Qed.
+
+Example test_doit3times': doit3times negb true = false.
+Proof. reflexivity. Qed.
+
+Fixpoint filter {X : Type} (test: X -> bool) (l:list X) : (list X) := 
+  match l with
+  | [] => []
+  | h :: t =>
+    if test h then h :: (filter test t)
+    else filter test t
+  end.
+
+(** For example, if we apply [filter] to the predicate [evenb]
+    and a list of numbers [l], it returns a list containing just the
+    even members of [l]. *)
+
+Example test_filter1: filter evenb [1;2;3;4] = [2;4].
+Proof. simpl. reflexivity. Qed.
+
+Definition length_is_1 {X : Type} (l : list X) : bool :=
+  (length l) =? 1.
+
+Example test_filter2:
+    filter length_is_1
+           [ [1; 2]; [3]; [4]; [5;6;7]; []; [8] ]
+  = [ [3]; [4]; [8] ].
+Proof. reflexivity. Qed.
+
+(** We can use [filter] to give a concise version of the
+    [countoddmembers] function from the [Lists] chapter. *)
+
+Definition countoddmembers' (l:list nat) : nat :=
+  length (filter oddb l).
+
+Example test_countoddmembers'1:   countoddmembers' [1;0;3;1;4;5] = 4.
+Proof. reflexivity. Qed.
+Example test_countoddmembers'2:   countoddmembers' [0;2;4] = 0.
+Proof. reflexivity. Qed.
+Example test_countoddmembers'3:   countoddmembers' nil = 0.
+Proof. reflexivity. Qed.
+
+(* ================================================================= *)
+(** ** Anonymous Functions *)
+
+(** It is arguably a little sad, in the example just above, to
+    be forced to define the function [length_is_1] and give it a name
+    just to be able to pass it as an argument to [filter], since we
+    will probably never use it again.  Moreover, this is not an
+    isolated example: when using higher-order functions, we often want
+    to pass as arguments "one-off" functions that we will never use
+    again; having to give each of these functions a name would be
+    tedious.
+
+    Fortunately, there is a better way.  We can construct a function
+    "on the fly" without declaring it at the top level or giving it a
+    name. *)
+
+Example test_anon_fun':
+  doit3times (fun n => n * n) 2 = 256.
+Proof. simpl. reflexivity. Qed.
+
+(** The expression [(fun n => n * n)] can be read as "the function
+    that, given a number [n], yields [n * n]." *)
+
+(** Here is the [filter] example, rewritten to use an anonymous
+    function. *)
+
+Example test_filter2':
+    filter (fun l => (length l) =? 1)
+           [ [1; 2]; [3]; [4]; [5;6;7]; []; [8] ]
+  = [ [3]; [4]; [8] ].
+Proof. reflexivity. Qed.
+
+(** **** Exercise: 3 stars, standard (partition) 
+
+    Use [filter] to write a Coq function [partition]:
+
+      partition : forall X : Type,
+                  (X -> bool) -> list X -> list X * list X
+
+   Given a set [X], a predicate of type [X -> bool] and a [list X],
+   [partition] should return a pair of lists.  The first member of the
+   pair is the sublist of the original list containing the elements
+   that satisfy the test, and the second is the sublist containing
+   those that fail the test.  The order of elements in the two
+   sublists should be the same as their order in the original list. *)
+
+Fixpoint partition {X : Type} (test : X -> bool) (l : list X)
+                   : list X * list X :=
+  match l with
+  | [] => ([], [])
+  | h :: t => if test h then app_list_pair ([h], []) (partition test t)
+              else app_list_pair ([], [h]) (partition test t)
+  end.
+
+Example test_partition1: partition oddb [1;2;3;4;5] = ([1;3;5], [2;4]).
+Proof. simpl. reflexivity. Qed.
+Example test_partition2: partition (fun x => false) [5;9;0] = ([], [5;9;0]).
+Proof. simpl. reflexivity. Qed.
+
+(* ================================================================= *)
+(** ** Map *)
+
+(** Another handy higher-order function is called [map]. *)
+
+Fixpoint map {X Y: Type} (f:X->Y) (l:list X) : (list Y) :=
+  match l with
+  | []     => []
+  | h :: t => (f h) :: (map f t)
+  end.
+
+(** It takes a function [f] and a list [ l = [n1, n2, n3, ...] ]
+    and returns the list [ [f n1, f n2, f n3,...] ], where [f] has
+    been applied to each element of [l] in turn.  For example: *)
+
+Example test_map1: map (fun x => plus 3 x) [2;0;2] = [5;3;5].
+Proof. simpl. reflexivity. Qed.
+
+Example test_map2:
+  map oddb [2;1;2;5] = [false;true;false;true].
+Proof. simpl. reflexivity. Qed.
+
+(** It can even be applied to a list of numbers and
+    a function from numbers to _lists_ of booleans to
+    yield a _list of lists_ of booleans: *)
+
+Example test_map3:
+    map (fun n => [evenb n;oddb n]) [2;1;2;5]
+  = [[true;false];[false;true];[true;false];[false;true]].
+Proof. reflexivity. Qed.
+
+(** **** Exercise: 2 stars, standard, especially useful (flat_map) 
+
+    The function [map] maps a [list X] to a [list Y] using a function
+    of type [X -> Y].  We can define a similar function, [flat_map],
+    which maps a [list X] to a [list Y] using a function [f] of type
+    [X -> list Y].  Your definition should work by 'flattening' the
+    results of [f], like so:
+
+        flat_map (fun n => [n;n+1;n+2]) [1;5;10]
+      = [1; 2; 3; 5; 6; 7; 10; 11; 12].
+*)
+
+Fixpoint flat_map {X Y: Type} (f: X -> list Y) (l: list X) : (list Y) :=
+  match l with
+  | [] => []
+  | h :: t => f h ++ flat_map f t
+  end.
+
+Example test_flat_map1:
+  flat_map (fun n => [n;n;n]) [1;5;4]
+  = [1; 1; 1; 5; 5; 5; 4; 4; 4].
+Proof. simpl. reflexivity. Qed.
+
+(* ================================================================= *)
+(** ** Fold *)
+
+(** An even more powerful higher-order function is called
+    [fold].  This function is the inspiration for the "[reduce]"
+    operation that lies at the heart of Google's map/reduce
+    distributed programming framework. *)
+
+Fixpoint fold {X Y : Type} (f: X->Y->Y) (l:list X) (b : Y) : Y :=
+  match l with
+  | nil => b
+  | h :: t => f h (fold f t b)
+  end.
+
+(** Intuitively, the behavior of the [fold] operation is to
+    insert a given binary operator [f] between every pair of elements
+    in a given list.  For example, [ fold plus [1;2;3;4] ] intuitively
+    means [1+2+3+4].  To make this precise, we also need a "starting
+    element" that serves as the initial second input to [f].  So, for
+    example,
+
+       fold plus [1;2;3;4] 0
+
+    yields
+
+       1 + (2 + (3 + (4 + 0))).
+
+    Some more examples: *)
+
+Check (fold andb) : list bool -> bool -> bool.
+
+Example fold_example1 :
+  fold mult [1;2;3;4] 1 = 24.
+Proof. reflexivity. Qed.
+
+Example fold_example2 :
+  fold andb [true;true;false;true] true = false.
+Proof. reflexivity. Qed.
+
+Example fold_example3 :
+  fold app  [[1];[];[2;3];[4]] [] = [1;2;3;4].
+Proof. reflexivity. Qed.
+
+(* ================================================================= *)
+(** ** Functions That Construct Functions *)
+
+(** Most of the higher-order functions we have talked about so
+    far take functions as arguments.  Let's look at some examples that
+    involve _returning_ functions as the results of other functions.
+    To begin, here is a function that takes a value [x] (drawn from
+    some type [X]) and returns a function from [nat] to [X] that
+    yields [x] whenever it is called, ignoring its [nat] argument. *)
+
+Definition constfun {X: Type} (x: X) : nat->X :=
+  fun (k:nat) => x.
+
+Definition ftrue := constfun true.
+
+Example constfun_example1 : ftrue 0 = true.
+Proof. reflexivity. Qed.
+
+Example constfun_example2 : (constfun 5) 99 = 5.
+Proof. reflexivity. Qed.
+
+(** In fact, the multiple-argument functions we have already
+    seen are also examples of passing functions as data.  To see why,
+    recall the type of [plus]. *)
+
+Check plus : nat -> nat -> nat.
+
+(** Each [->] in this expression is actually a _binary_ operator
+    on types.  This operator is _right-associative_, so the type of
+    [plus] is really a shorthand for [nat -> (nat -> nat)] -- i.e., it
+    can be read as saying that "[plus] is a one-argument function that
+    takes a [nat] and returns a one-argument function that takes
+    another [nat] and returns a [nat]."  In the examples above, we
+    have always applied [plus] to both of its arguments at once, but
+    if we like we can supply just the first.  This is called _partial
+    application_. *)
+
+Definition plus3 := plus 3.
+Check plus3 : nat -> nat.
+
+Example test_plus3 :    plus3 4 = 7.
+Proof. reflexivity. Qed.
+Example test_plus3' :   doit3times plus3 0 = 9.
+Proof. reflexivity. Qed.
+Example test_plus3'' :  doit3times (plus 3) 0 = 9.
+Proof. reflexivity. Qed.
+
+Module Exercises.
+
+(** **** Exercise: 2 stars, standard (fold_length) 
+
+    Many common functions on lists can be implemented in terms of
+    [fold].  For example, here is an alternative definition of [length]: *)
+
+Definition fold_length {X : Type} (l : list X) : nat :=
+  fold (fun _ n => S n) l 0.
+
+Example test_fold_length1 : fold_length [4;7;0] = 3.
+Proof. reflexivity. Qed.
+
+(** Prove the correctness of [fold_length].  (Hint: It may help to
+    know that [reflexivity] simplifies expressions a bit more
+    aggressively than [simpl] does -- i.e., you may find yourself in a
+    situation where [simpl] does nothing but [reflexivity] solves the
+    goal.) *)
+
+Theorem fold_length_correct : forall X (l : list X),
+  fold_length l = length l.
+Proof.
+  intros X l. induction l as [| n l' IHl'].
+  - (* l = nil *)
+  simpl.
+  reflexivity.
+  - (* l = cons n l' *)
+  simpl. 
+  rewrite <- IHl'.
+  reflexivity.
+Qed.
+
+(** **** Exercise: 3 stars (fold_map)  *)
+(** We can also define [map] in terms of [fold].  Finish [fold_map]
+    below. *)
+
+Definition fold_map {X Y : Type} (f : X -> Y) (l : list X) : list Y :=
+  fold (fun h t => f h :: t) l [].
+
+(** **** Exercise: 2 stars, advanced (currying) 
+
+    In Coq, a function [f : A -> B -> C] really has the type [A
+    -> (B -> C)].  That is, if you give [f] a value of type [A], it
+    will give you function [f' : B -> C].  If you then give [f'] a
+    value of type [B], it will return a value of type [C].  This
+    allows for partial application, as in [plus3].  Processing a list
+    of arguments with functions that return functions is called
+    _currying_, in honor of the logician Haskell Curry.
+
+    Conversely, we can reinterpret the type [A -> B -> C] as [(A *
+    B) -> C].  This is called _uncurrying_.  With an uncurried binary
+    function, both arguments must be given at once as a pair; there is
+    no partial application. *)
+
+(** We can define currying as follows: *)
+
+Definition prod_curry {X Y Z : Type}
+  (f : X * Y -> Z) (x : X) (y : Y) : Z := f (x, y).
+
+Definition prod_uncurry {X Y Z : Type}
+  (f : X -> Y -> Z) (p : X * Y) : Z := f (fst p) (snd p).
+
+Example test_map1': map (plus 3) [2;0;2] = [5;3;5].
+Proof. reflexivity. Qed.
+
+(** Thought exercise: before running the following commands, can you
+    calculate the types of [prod_curry] and [prod_uncurry]? *)
+
+Check @prod_curry.
+Check @prod_uncurry.
+
+Theorem uncurry_curry : forall (X Y Z : Type) (f : X -> Y -> Z) x y,
+  prod_curry (prod_uncurry f) x y = f x y.
+Proof. reflexivity. Qed.
+
+Theorem curry_uncurry : forall (X Y Z : Type)
+                        (f : (X * Y) -> Z) (p : X * Y),
+  prod_uncurry (prod_curry f) p = f p.
+Proof.
+  intros X Y Z f p. destruct p as [m n]. 
+  reflexivity.
+Qed.
+
+(** The following exercises explore an alternative way of defining
+    natural numbers, using the so-called _Church numerals_, named
+    after mathematician Alonzo Church.  We can represent a natural
+    number [n] as a function that takes a function [f] as a parameter
+    and returns [f] iterated [n] times. *)
+
+Module Church.
+
+Definition cnat := forall X : Type, (X -> X) -> X -> X.
+
+(** Let's see how to write some numbers with this notation. Iterating
+    a function once should be the same as just applying it.  Thus: *)
+
+Definition one : cnat :=
+  fun (X : Type) (f : X -> X) (x : X) => f x.
+
+(** Similarly, [two] should apply [f] twice to its argument: *)
+
+
+Definition two : cnat :=
+  fun (X : Type) (f : X -> X) (x : X) => f (f x).
+
+(** Defining [zero] is somewhat trickier: how can we "apply a function
+    zero times"?  The answer is actually simple: just return the
+    argument untouched. *)
+
+Definition zero : cnat :=
+  fun (X : Type) (f : X -> X) (x : X) => x.
+
+(** More generally, a number [n] can be written as [fun X f x => f (f
+    ... (f x) ...)], with [n] occurrences of [f].  Notice in
+    particular how the [doit3times] function we've defined previously
+    is actually just the Church representation of [3]. *)
+
+Definition three : cnat := @doit3times.
+
+(** **** Exercise: 1 star, advanced (church_succ)  *)
+
+(** Successor of a natural number: given a Church numeral [n],
+    the successor [succ n] is a function that iterates its
+    argument once more than [n]. *)
+
+Definition succ (n : cnat) : cnat :=
+  fun X f x => n X f (f x).
+  
+Example succ_1 : succ zero = one.
+Proof. reflexivity. Qed.
+
+Example succ_2 : succ one = two.
+Proof. reflexivity. Qed.
+  
+Example succ_3 : succ two = three.
+Proof. reflexivity. Qed.
+
+
+End Church.
+End Exercises.
 
 
