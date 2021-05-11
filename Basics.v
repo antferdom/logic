@@ -903,6 +903,18 @@ Proof.
     }
 Qed.
 
+Theorem andb_true_elim2 : forall b c : bool,
+  andb b c = true -> c = true.
+Proof.
+  intros b c.
+  intros H.
+  destruct c.
+  - reflexivity.
+  - destruct b.
+    * simpl in H. discriminate.
+    * simpl in H. discriminate.
+Qed.
+
 (** If there are no constructor arguments that need names, we can just
     write [[]] to get the case analysis. *)
 
