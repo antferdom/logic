@@ -748,14 +748,33 @@ Qed.
     Write a relation [bevalR] in the same style as
     [aevalR], and prove that it is equivalent to [beval]. *)
 
-Reserved Notation "e '==>b' b" (at level 90, left associativity).
+(* Reserved Notation "e '==>b' b" (at level 90, left associativity). *)
+
+
 Inductive bevalR: bexp -> bool -> Prop :=
-(* FILL IN HERE *)
-where "e '==>b' b" := (bevalR e b) : type_scope
-.
+  | BETrue : bevalR BTrue true
+  | BEFalse : bevalR BFalse false
+  | BEEq : forall  (a1 a2 : aexp) (n1 n2 : nat),
+    aevalR  a1 n1 ->
+    aevalR  a2 n2 ->
+    bevalR  (BEq a1 a2) (n1 =? n2)
+  | BELe : forall  (a1 a2 : aexp) (n1 n2 : nat),
+    aevalR  a1 n1 ->
+    aevalR  a2 n2 ->
+    bevalR  (BLe a1 a2) (leb n1 n2)
+  | BENot : forall  (b1 : bexp) (x1 : bool),
+    bevalR  b1 x1 ->
+    bevalR  (BNot b1) (negb x1)
+  | BEAnd : forall  (b1 b2 : bexp) (x1 x2 : bool),
+    bevalR  b1 x1 ->
+    bevalR  b2 x2 ->
+    bevalR  (BAnd b1 b2) (andb x1 x2).
+
+
+(* where "e '==>b' b" := (bevalR e b) : type_scope. *)
 
 Lemma beval_iff_bevalR : forall b bv,
-  b ==>b bv <-> beval b = bv.
+  bevalR b bv <-> beval b = bv.
 Proof.
   (* FILL IN HERE *) Admitted.
 (** [] *)
